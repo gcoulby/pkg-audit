@@ -2,15 +2,17 @@ import { useState, useRef, useEffect } from 'react'
 import { fetchNpmSearch } from '../lib/api'
 import type { NpmSearchItem } from '../lib/api'
 import type { WebLLMState } from '../hooks/useWebLLM'
+import type { ProviderName } from '../hooks/useSettings'
 
 interface SearchViewProps {
   onSearch: (query: string) => void
   getRecent: () => string[]
   webllm: WebLLMState
   onRequestLoad: () => void
+  provider: ProviderName
 }
 
-export default function SearchView({ onSearch, getRecent, webllm, onRequestLoad }: SearchViewProps) {
+export default function SearchView({ onSearch, getRecent, webllm, onRequestLoad, provider }: SearchViewProps) {
   const [query, setQuery] = useState('')
   const [suggestions, setSuggestions] = useState<NpmSearchItem[]>([])
   const [focused, setFocused] = useState(false)
@@ -162,7 +164,7 @@ export default function SearchView({ onSearch, getRecent, webllm, onRequestLoad 
           </div>
         )}
 
-        <ModelWidget webllm={webllm} onRequestLoad={onRequestLoad} />
+        {provider === 'webllm' && <ModelWidget webllm={webllm} onRequestLoad={onRequestLoad} />}
       </div>
     </div>
   )

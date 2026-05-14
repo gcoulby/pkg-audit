@@ -1,6 +1,7 @@
 import { DotPulse } from './ui'
 import type { AiState } from '../hooks/usePackageScan'
 import type { WebLLMState } from '../hooks/useWebLLM'
+import type { ProviderName } from '../hooks/useSettings'
 
 const SECTION_HEADERS = ['SECURITY', 'DEPENDENCY WEIGHT', 'DO YOU EVEN NEED THIS', 'VERDICT']
 
@@ -40,10 +41,22 @@ function formatAIText(text: string): Part[] {
   return parts
 }
 
-interface AIPanelProps {
-  ai: AiState
-  webllm: WebLLMState
-  onRequestLoad: () => void
+const headerStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: 10,
+  letterSpacing: '.1em',
+  textTransform: 'uppercase',
+  color: 'var(--text3)',
+  fontFamily: 'var(--mono)',
+  marginTop: 16,
+  marginBottom: 4,
+}
+
+const textStyle: React.CSSProperties = {
+  fontSize: 13,
+  color: 'var(--text2)',
+  lineHeight: 1.75,
+  whiteSpace: 'pre-wrap',
 }
 
 const panelWrap: React.CSSProperties = {
@@ -53,28 +66,75 @@ const panelWrap: React.CSSProperties = {
   marginBottom: 24,
 }
 
-export default function AIPanel({ ai, webllm, onRequestLoad }: AIPanelProps) {
+function StreamedContent({ text, streaming }: { text: string; streaming: boolean }) {
+  const parts = formatAIText(text)
+  return (
+    <div>
+      {parts.map((part, i) => {
+        if (part.type === 'header') {
+          return (
+            <span key={i} style={{
+              ...headerStyle,
+              marginTop: i === 0 ? 0 : 16,
+              color: part.label === 'VERDICT' ? 'var(--text2)' : 'var(--text3)',
+              fontWeight: part.label === 'VERDICT' ? 500 : 400,
+            }}>
+              {part.label}
+            </span>
+          )
+        }
+        return (
+          <span key={i} style={{ ...textStyle, display: 'block' }}>
+            {part.content.trim()}
+          </span>
+        )
+      })}
+      {streaming && (
+        <span style={{
+          display: 'inline-block',
+          width: 2,
+          height: 13,
+          background: 'var(--text3)',
+          marginLeft: 2,
+          verticalAlign: 'middle',
+          animation: 'pulse 1s ease-in-out infinite',
+        }} />
+      )}
+    </div>
+  )
+}
+
+interface AIPanelProps {
+  ai: AiState
+  webllm: WebLLMState
+  onRequestLoad: () => void
+  provider: ProviderName
+}
+
+export default function AIPanel({ ai, webllm, onRequestLoad, provider }: AIPanelProps) {
+  // Online providers — skip WebLLM lifecycle UI entirely
+  if (provider !== 'webllm') {
+    const { text, status } = ai
+    if (status === 'idle') return null
+    return (
+      <div style={panelWrap}>
+        {status === 'streaming' && !text && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text3)', fontSize: 13 }}>
+            <DotPulse />
+            <span>analysing...</span>
+          </div>
+        )}
+        {status === 'error' && (
+          <div style={{ fontSize: 13, color: 'var(--redtext)' }}>{ai.error}</div>
+        )}
+        {text && <StreamedContent text={text} streaming={status === 'streaming'} />}
+      </div>
+    )
+  }
+
+  // WebLLM: WebGPU check
   const hasWebGPU = typeof navigator !== 'undefined' && !!navigator.gpu
 
-  const headerStyle: React.CSSProperties = {
-    display: 'block',
-    fontSize: 10,
-    letterSpacing: '.1em',
-    textTransform: 'uppercase',
-    color: 'var(--text3)',
-    fontFamily: 'var(--mono)',
-    marginTop: 16,
-    marginBottom: 4,
-  }
-
-  const textStyle: React.CSSProperties = {
-    fontSize: 13,
-    color: 'var(--text2)',
-    lineHeight: 1.75,
-    whiteSpace: 'pre-wrap',
-  }
-
-  // No WebGPU support
   if (!hasWebGPU) {
     return (
       <div style={panelWrap}>
@@ -87,31 +147,30 @@ export default function AIPanel({ ai, webllm, onRequestLoad }: AIPanelProps) {
     )
   }
 
-  // Model not yet loaded — show download or cached prompt
+  // WebLLM: idle — download or cached prompt
   if (webllm.status === 'idle') {
     if (webllm.cached) {
       return (
         <div style={panelWrap}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 16 }}>✓</span>
-              <span style={{ fontSize: 13, color: 'var(--text2)', fontFamily: 'var(--mono)' }}>Model cached</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, color: 'var(--text2)' }}>✓ Model cached</div>
             </div>
             <button
               onClick={onRequestLoad}
               style={{
-                alignSelf: 'flex-start',
                 background: 'var(--bg)',
                 border: '0.5px solid var(--border2)',
                 borderRadius: 8,
-                padding: '8px 16px',
-                fontSize: 13,
+                padding: '7px 14px',
+                fontSize: 12,
                 color: 'var(--text)',
                 cursor: 'pointer',
                 fontFamily: 'var(--mono)',
+                flexShrink: 0,
               }}
             >
-              Load model (~2s)
+              Load (~2s)
             </button>
           </div>
         </div>
@@ -150,20 +209,14 @@ export default function AIPanel({ ai, webllm, onRequestLoad }: AIPanelProps) {
     )
   }
 
-  // Model downloading / initialising
+  // WebLLM: loading
   if (webllm.status === 'loading') {
     return (
       <div style={panelWrap}>
         <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', marginBottom: 8 }}>
           Loading model
         </div>
-        <div style={{
-          background: 'var(--bg)',
-          borderRadius: 4,
-          height: 6,
-          overflow: 'hidden',
-          marginBottom: 6,
-        }}>
+        <div style={{ background: 'var(--bg)', borderRadius: 4, height: 6, overflow: 'hidden', marginBottom: 6 }}>
           <div style={{
             height: '100%',
             width: `${webllm.progress}%`,
@@ -172,15 +225,15 @@ export default function AIPanel({ ai, webllm, onRequestLoad }: AIPanelProps) {
             transition: 'width 0.3s ease',
           }} />
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text3)', marginBottom: 6 }}>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{webllm.progressLabel}</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text3)' }}>
+          <span style={{ fontFamily: 'var(--mono)' }}>{webllm.progressLabel}</span>
           <span>{webllm.progress}%</span>
         </div>
       </div>
     )
   }
 
-  // Model load error
+  // WebLLM: model load error
   if (webllm.status === 'error') {
     return (
       <div style={panelWrap}>
@@ -191,7 +244,7 @@ export default function AIPanel({ ai, webllm, onRequestLoad }: AIPanelProps) {
     )
   }
 
-  // Model ready or inferring — show AI output
+  // WebLLM: ready or inferring — show AI output
   const { text, status } = ai
 
   return (
@@ -202,50 +255,17 @@ export default function AIPanel({ ai, webllm, onRequestLoad }: AIPanelProps) {
           <span>analysing...</span>
         </div>
       )}
-
       {status === 'error' && (
         <div style={{ fontSize: 13, color: 'var(--redtext)' }}>
           {ai.error || 'Analysis failed'}
         </div>
       )}
-
-      {text && (() => {
-        const parts = formatAIText(text)
-        return (
-          <div>
-            {parts.map((part, i) => {
-              if (part.type === 'header') {
-                return (
-                  <span key={i} style={{
-                    ...headerStyle,
-                    marginTop: i === 0 ? 0 : 16,
-                    color: part.label === 'VERDICT' ? 'var(--text2)' : 'var(--text3)',
-                    fontWeight: part.label === 'VERDICT' ? 500 : 400,
-                  }}>
-                    {part.label}
-                  </span>
-                )
-              }
-              return (
-                <span key={i} style={{ ...textStyle, display: 'block' }}>
-                  {part.content.trim()}
-                </span>
-              )
-            })}
-            {(status === 'streaming' || webllm.status === 'inferring') && (
-              <span style={{
-                display: 'inline-block',
-                width: 2,
-                height: 13,
-                background: 'var(--text3)',
-                marginLeft: 2,
-                verticalAlign: 'middle',
-                animation: 'pulse 1s ease-in-out infinite',
-              }} />
-            )}
-          </div>
-        )
-      })()}
+      {text && (
+        <StreamedContent
+          text={text}
+          streaming={status === 'streaming' || webllm.status === 'inferring'}
+        />
+      )}
     </div>
   )
 }

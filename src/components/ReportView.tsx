@@ -11,6 +11,7 @@ import AIPanel from './AIPanel'
 import type { ScanState } from '../hooks/usePackageScan'
 import type { Vuln } from '../lib/api'
 import type { WebLLMState } from '../hooks/useWebLLM'
+import type { ProviderName } from '../hooks/useSettings'
 
 function fmt(n: number | null | undefined): string {
   if (n === null || n === undefined) return '—'
@@ -168,6 +169,7 @@ interface ReportViewProps {
   onBack: () => void
   webllm: WebLLMState
   onRequestLoad: () => void
+  provider: ProviderName
 }
 
 export default function ReportView({
@@ -175,6 +177,7 @@ export default function ReportView({
   onBack,
   webllm,
   onRequestLoad,
+  provider,
 }: ReportViewProps) {
   const [activeTab, setActiveTab] = useState<Tab>('security')
 
@@ -337,7 +340,7 @@ export default function ReportView({
       <VerdictBanner verdict={scores.verdict} />
 
       {/* AI analysis */}
-      <AIPanel ai={ai} webllm={webllm} onRequestLoad={onRequestLoad} />
+      <AIPanel ai={ai} webllm={webllm} onRequestLoad={onRequestLoad} provider={provider} />
 
       {/* Tabs */}
       <div
